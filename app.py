@@ -1,24 +1,19 @@
-from langchain_core.messages import SystemMessage, HumanMessage
-
-from langgraph.graph import START, StateGraph, MessagesState, END
-from langgraph.prebuilt import tools_condition, ToolNode
-from langchain_ollama import ChatOllama
-
 import os
 import getpass
-from test_tool import add, multiply, divide
-from tools import get_weather_info, get_flight_info
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_ollama import ChatOllama
+from langgraph.graph import START, StateGraph, MessagesState, END
+from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
 
+from tools import get_weather_info, get_flight_info
 
 class State(MessagesState):
     tool_use: list
 
-
 def _set_env(var: str):
     if not os.environ.get(var):
         os.environ[var] = getpass.getpass(f"{var}: ")
-
 
 tools = [get_flight_info, get_weather_info]
 
@@ -91,6 +86,7 @@ def tools_condition_edge(state: State):
     if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
         return "tools"
     return "human_feedback"
+
 # 非Node Function--------------------------------------------------------
 # graph 圖片保存
 def save_graph(graph):
@@ -137,8 +133,6 @@ builder.add_edge("tools", "assistant")
 
 # Compile graph
 memory = MemorySaver()
-# graph = builder.compile(
-#  interrupt_after=["human_feedback"],checkpointer=memory)
 graph = builder.compile(checkpointer=memory)
 save_graph(graph)
 
