@@ -1,0 +1,3 @@
+{
+    "tool_function_list": ["get_weather_info","get_flight_info"]
+}

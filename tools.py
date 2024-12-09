@@ -1,6 +1,5 @@
 import requests
 
-
 def get_weather_info(location: str, days: str) -> list:
     """
     Returns weather information based on the provided request.
@@ -63,3 +62,13 @@ def get_flight_info(DepartureAirportID: str, ArrivalAirportID: str, ScheduleStar
     # else:
     #     flight_info = response.text
     # return flight_info
+
+querys = {
+    "get_weather_info": "請根據以下內容輸入你想查詢的天氣: 地名, 天數\n",
+    "get_flight_info": "請根據以下內容輸入你想查詢的航班: 出發地, 目的地, 起飛日\n",
+}
+
+all_tools = {
+    "get_weather_info": get_weather_info,
+    "get_flight_info": get_flight_info,
+}
