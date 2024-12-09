@@ -1,8 +1,7 @@
 from subgraph import SubGraph
 from state import State
 
-from langchain_ollama import ChatOllama
-from langgraph.graph import START, StateGraph, MessagesState, END
+from langgraph.graph import START, StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
 
