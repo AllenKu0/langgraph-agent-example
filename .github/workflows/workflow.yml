@@ -17,9 +17,9 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: action/checkout@v4
+        uses: actions/checkout@v4
       - name: Set Up Python
-        uses: action/setup-pyhton@v5
+        uses: actions/setup-pyhton@v5
         with:
           pyhton-version: '3.12'
       - name: Insatll dependencies
