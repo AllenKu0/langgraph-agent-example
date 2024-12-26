@@ -19,7 +19,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Set Up Python
-        uses: actions/setup-pyhton@v4
+        uses: actions/setup-python@v5
         with:
           pyhton-version: '3.12'
       - name: Insatll dependencies
