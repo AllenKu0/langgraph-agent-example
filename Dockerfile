@@ -10,7 +10,7 @@ WORKDIR /app
 
 COPY ./ ./
 
-RUN ollame pull ${MODEL}
+RUN ollama pull ${MODEL}
 
 RUN pip install --no-cache-dir -r requirements.txt
 
