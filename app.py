@@ -26,5 +26,4 @@ if __name__ == "__main__":
     # graph.invoke(initial_input, thread, stream_mode="values")
 
     for event in graph.stream(initial_input, thread, stream_mode="values"):
-        # print("Event:", event)
         event["messages"][-1].pretty_print()

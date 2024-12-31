@@ -21,27 +21,26 @@ class Graph:
         builder.add_node("assistant", sub_graph.assistant)
         builder.add_node("tools", ToolNode([tool]))
         builder.add_node("human_feedback", sub_graph.human_feedback)
-        builder.add_node("arg_assistant", sub_graph.arg_assistant)
+        builder.add_node("arg_check_assistant", sub_graph.arg_check_assistant)
+        builder.add_node("arg_add_assistant", sub_graph.arg_add_assistant)
+        
         if start_index != len(self.tools) - 1:
             builder.add_node("next_graph", self.build_graph(start_index+1))
             builder.add_conditional_edges("human_feedback", sub_graph.llm_call, [
-                                          "assistant", "next_graph", "arg_assistant"])
+                                          "assistant", "next_graph", "arg_add_assistant"])
         else:
             builder.add_conditional_edges(
-                "human_feedback", sub_graph.llm_call_to_end, ["assistant", END, "arg_assistant"])
+                "human_feedback", sub_graph.llm_call_to_end, ["assistant", END, "arg_add_assistant"])
         # Edge
         builder.add_edge(START, "human_feedback")
         builder.add_conditional_edges(
             "assistant",
             sub_graph.tools_condition_edge,
-            ["tools", "human_feedback", "arg_assistant"]
+            ["tools", "human_feedback", "arg_check_assistant"]
         )
+        builder.add_edge("arg_check_assistant","human_feedback")
         builder.add_edge("tools", "assistant")
-        builder.add_conditional_edges(
-            "arg_assistant",
-            sub_graph.is_arg_complete,
-            ["assistant", "human_feedback"]
-        )
+        builder.add_edge("arg_add_assistant", "assistant")
         # Compile graph
         memory = MemorySaver()
         graph = builder.compile(checkpointer=memory)
