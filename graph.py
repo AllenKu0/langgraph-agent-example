@@ -20,25 +20,34 @@ class Graph:
         #  Node
         builder.add_node("assistant", sub_graph.assistant)
         builder.add_node("tools", ToolNode([tool]))
-        builder.add_node("human_feedback", sub_graph.human_feedback)
+        builder.add_node("request_human_feedback", sub_graph.request_human_feedback)
+        builder.add_node("get_human_feedback", sub_graph.get_human_feedback)
         builder.add_node("arg_check_assistant", sub_graph.arg_check_assistant)
         builder.add_node("arg_add_assistant", sub_graph.arg_add_assistant)
         
         if start_index != len(self.tools) - 1:
             builder.add_node("next_graph", self.build_graph(start_index+1))
-            builder.add_conditional_edges("human_feedback", sub_graph.llm_call, [
-                                          "assistant", "next_graph", "arg_add_assistant"])
-        else:
+            # builder.add_conditional_edges("request_human_feedback", sub_graph.get_human_feedback_or_to_next_graph, [
+            #                               "get_human_feedback", "next_graph"])
             builder.add_conditional_edges(
-                "human_feedback", sub_graph.llm_call_to_end, ["assistant", END, "arg_add_assistant"])
+                "assistant",
+                sub_graph.tools_condition_edge_to_next_graph,
+                ["tools", "next_graph", "arg_check_assistant"]
+            )
+        else:
+            # builder.add_conditional_edges(
+            #     "request_human_feedback", sub_graph.get_human_feedback_or_to_end, ["get_human_feedback", END])
+            builder.add_conditional_edges(
+                "assistant",
+                sub_graph.tools_condition_edge_to_end,
+                ["tools", END, "arg_check_assistant"]
+            )
         # Edge
-        builder.add_edge(START, "human_feedback")
-        builder.add_conditional_edges(
-            "assistant",
-            sub_graph.tools_condition_edge,
-            ["tools", "human_feedback", "arg_check_assistant"]
-        )
-        builder.add_edge("arg_check_assistant","human_feedback")
+        builder.add_edge(START, "request_human_feedback")
+        builder.add_conditional_edges("get_human_feedback", sub_graph.arg_add_assistant_or_assistant, ["arg_add_assistant", "assistant"])
+        builder.add_edge("request_human_feedback", "get_human_feedback")
+        # builder.add_edge("get_human_feedback", "arg_add_assistant")
+        builder.add_edge("arg_check_assistant","request_human_feedback")
         builder.add_edge("tools", "assistant")
         builder.add_edge("arg_add_assistant", "assistant")
         # Compile graph

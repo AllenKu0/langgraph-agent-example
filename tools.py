@@ -1,12 +1,14 @@
 import requests
 
-def get_weather_info(location: str, days: str) -> list:
+
+def get_weather_info(location: str, days: str, zone: str) -> list:
     """
     Returns weather information based on the provided request.
 
     Args:
         location: The city to get the weather for.
-        days: The number of days for the weather forecast (e.g. 1).
+        days: The number of days for the weather forecast.
+        zone: The zone for the location.
 
     Returns:
         list: A list of flight information dictionaries matching the request criteria.
@@ -62,6 +64,7 @@ def get_flight_info(DepartureAirportID: str, ArrivalAirportID: str, ScheduleStar
     # else:
     #     flight_info = response.text
     # return flight_info
+
 
 querys = {
     "get_weather_info": "請根據以下內容輸入你想查詢的天氣: 地名, 天數\n",

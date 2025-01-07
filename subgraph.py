@@ -1,7 +1,7 @@
-
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_ollama import ChatOllama
 from langgraph.graph import END
+from langgraph.types import interrupt
 from tools import querys
 from state import State
 import re
@@ -21,7 +21,7 @@ class SubGraph:
         )
         self.sys_msg = SystemMessage(
             content="""
-                You are an AI Agent equipped with various tools to help you complete tasks. 
+                You are an AI Agent equipped with various tools to help you complete tasks and give a anwser to user. 
                 Please Follow below steps to think, and do the decision in the end.
                 1. If you can directly answer the question, do not generate a tool message.
                 2. You should automatically determine whether these tools are needed based on the user's request. 
@@ -50,18 +50,16 @@ class SubGraph:
                 get_weather_info: location, days, zone
                 get_flight_info: DepartureAirportID, ArrivalAirportID, ScheduleStartDate, ScheduleEndDate
                 
-            According to the user query, you have to regenerate a complete query with now argument. just output like below
+            According to the user query, you have to regenerate a complete query with now argument.
             Example:
                 I want use get_weather_info tool with below arguments:
                 Current arguments: {"date": "2024-12-05"}
         """)
-        # If all arguments key have value,you shoud regenerate a new complete query as output with "Argument is complete" in the end
-        # Current arguments: {"date": "2024-12-05"}
         self.querys = {tool.__name__: querys[tool.__name__]}
 
     def assistant(self, state: State):
         # System message
-        print("now is assistant Agent----------------------------------------------------------------------------------------------------")
+        print("now is assistant ----------------------------------------------------------------------------------------------------")
         messages = self.llm.invoke([self.sys_msg] + [state["messages"][-1]])
         print("assistant messages:", messages)
         if hasattr(messages, "tool_calls") and len(messages.tool_calls) > 0:
@@ -71,61 +69,82 @@ class SubGraph:
             state["tool_use"].append(messages.tool_calls[-1]["name"])
             if state["args_missing_funcname"] != "":
                 messages = HumanMessage(content=str(messages.tool_calls[-1]))
-        
+
         return {"messages": [messages], "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
 
     def arg_check_assistant(self, state: State):
+        print("now is arg_check_assistant ----------------------------------------------------------------------------------------------------")
         messages = self.llm_with_no_tool.invoke(
             [self.sys_args_check_msg] + [state["messages"][-1]])
         print("arg_check_assistant", messages)
-        return {"messages": [messages], "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
+        return {"messages": [HumanMessage(content=messages.content)], "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
 
     def arg_add_assistant(self, state: State):
+        print("now is arg_add_assistant ----------------------------------------------------------------------------------------------------")
         messages = self.llm_with_no_tool.invoke(
             [self.sys_args_add_msg] + [state["messages"][-1]])
 
         print("arg_add_assistant messages:", messages)
         tool_args = self.arg_extract_json_from_string(messages.content)
         if tool_args != None:
-            state["tool_calls_args"] = tool_args 
-        print("tool_calls_args",state["tool_calls_args"])
+            state["tool_calls_args"] = tool_args
+        print("tool_calls_args", state["tool_calls_args"])
         messages = HumanMessage(content=messages.content)
-        # if ("Argument is complete" in messages.content):
+        return {"messages": [messages], "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
+
+    def request_human_feedback(self, state: State):
+        print("now is request_human_feedback ----------------------------------------------------------------------------------------------------")
+        print("state[messages][-1].content", state["messages"][-1].content)
+        # try:
+        #     if (state["args_missing_funcname"] != ""):
+        #         print("缺值")
+        #         return self.handle_tool_use(state)
+        # except Exception as e:
         #     state["args_missing_funcname"] = ""
         #     state["tool_calls_args"] = {}
-        #     messages = HumanMessage(content=messages.content)
-        return {"messages": [messages], "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
-    def human_feedback(self, state: State):
-        print("now is human_feedback ----------------------------------------------------------------------------------------------------")
-        print("state[messages][-1].content",state["messages"][-1].content)
-        try:
-            if (state["args_missing_funcname"] != ""):
-                return self.handle_tool_use(state, state["messages"][-1].content)
-        except Exception as e:
-            state["args_missing_funcname"] = ""
-            state["tool_calls_args"] = {}
-            state["tool_use"] = []
-        return self.handle_tool_use(state)
-    
+        #     state["tool_use"] = []
+        # print("不缺值")
+        state["args_missing_funcname"] = state.get("args_missing_funcname", "")
+        state["tool_calls_args"] = state.get("tool_calls_args", {})
+        state["tool_use"] = state.get("tool_use", [])
+        message = self.handle_tool_use(state)
+        print("我的message勒:", message["messages"])
+        return message
+
+    def get_human_feedback(self, state: State):
+        print("get_human_feedback 前[-1].content",
+              state["messages"][-1].type)
+        print("now is get_human_feedback ----------------------------------------------------------------------------------------------------")
+        feedback = interrupt("Please provide feedback:")
+        print("feedback:", feedback)
+        print("state[messages][-1].content", state["messages"][-1].content)
+
+        messages = self.get_user_input(
+            feedback, state["messages"][-1].content, state["args_missing_funcname"], state["tool_calls_args"])
+
+        return {"messages": messages, "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
+
     # 非最後一個Agent，呼叫下一個Agent，進入next_graph
-    def llm_call(self, state: State):
-        if state["args_missing_funcname"] != "":
-            return "arg_add_assistant"
-        elif self.tool.__name__ in state["tool_use"]:
+    def arg_check_assistant_or_to_next_graph(self, state: State):
+        if self.tool.__name__ in state["tool_use"]:
             return "next_graph"
         else:
-            return "assistant"
+            return "arg_check_assistant"
 
     # 最後一個Agent，呼叫結束
-    def llm_call_to_end(self, state: State):
+    # def arg_check_assistant_or_to_end(self, state: State):
+    #     if self.tool.__name__ in state["tool_use"]:
+    #         return END
+    #     else:
+    #         return "arg_check_assistant"
+
+    def arg_add_assistant_or_assistant(self, state: State):
         if state["args_missing_funcname"] != "":
             return "arg_add_assistant"
-        elif self.tool.__name__ in state["tool_use"]:
-            return END
         else:
             return "assistant"
 
-    def tools_condition_edge(self, state: State):
+    def tools_condition_edge_to_next_graph(self, state: State):
         if isinstance(state, list):
             ai_message = state[-1]
         elif isinstance(state, dict) and (messages := state.get("messages", [])):
@@ -139,26 +158,39 @@ class SubGraph:
             return "arg_check_assistant"
         if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
             return "tools"
-        return "human_feedback"
+        return "next_graph"
 
-    def handle_tool_use(self, state, missing_message=""):
-        if missing_message.strip() != "":
-            return {"messages": self.get_user_input(missing_message, state["args_missing_funcname"], state["tool_calls_args"]), "args_missing_funcname": state["args_missing_funcname"]}
+    def tools_condition_edge_to_end(self, state: State):
+        if isinstance(state, list):
+            ai_message = state[-1]
+        elif isinstance(state, dict) and (messages := state.get("messages", [])):
+            ai_message = messages[-1]
+        elif messages := getattr(state, messages, []):
+            ai_message = messages[-1]
+        else:
+            raise ValueError(
+                f"No messages found in input state to tool_edge: {state}")
+        if state["args_missing_funcname"] != "":
+            return "arg_check_assistant"
+        if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
+            return "tools"
+        return END
+
+    def handle_tool_use(self, state):
+        if state["args_missing_funcname"] != "":
+            return {"messages": AIMessage(content=state["messages"][-1].content), "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
         for tool, prompt in self.querys.items():
             if tool not in state["tool_use"]:
+                # state["check_point_id"][tool] =
                 print(
                     f"now is {self.tool.__name__}  Agent----------------------------------------------------------------------------------------------------")
-                return {"messages": self.get_user_input(prompt), "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
+                print("prompt:", prompt)
+                return {"messages": AIMessage(content=prompt), "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
         return {"messages": [], "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
 
-    def get_user_input(self, prompt, missing_funcname="", old_args={}):
+    def get_user_input(self, user_input, prompt, missing_funcname="", old_args={}):
         if missing_funcname != "":
-            # print("prompt:", prompt)
-            # prompt = prompt.split('Current arguments: ', 1)[0].strip()
-            # args = prompt[1].strip()
-            user_input = input(prompt)
             return [HumanMessage(content=f"我原本是要進行{missing_funcname}，並且之前提供過參數{old_args}，這是我根據 {prompt} 補上的參數:{user_input}")]
-        user_input = input(prompt)
         return [HumanMessage(content=user_input)]
 
     def check_args_null_or_blank(self, json):
@@ -167,22 +199,17 @@ class SubGraph:
                 return True
         return False
 
-    def is_arg_complete(self, state: State):
-        if state["args_missing_funcname"] != "":
-            return "human_feedback"
-        return "assistant"
-
     def arg_extract_json_from_string(self, message):
         # Regular expression to match JSON content
         dict_pattern = re.compile(r'\{.*?\}')
-    
+
         # Find the first match of the dictionary pattern in the string
         match = dict_pattern.search(message)
-        
+
         if match:
             # Extract the matched dictionary-like string
             dict_str = match.group(0)
-            
+
             # Convert the string to a dictionary
             try:
                 dict_obj = ast.literal_eval(dict_str)
