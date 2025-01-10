@@ -6,8 +6,6 @@ import threading
 import time
 import gradio as gr
 from langgraph.types import Command
-from langchain_core.messages import HumanMessage, AIMessage
-from functools import partial
 
 
 def _set_env(var: str):
@@ -137,7 +135,7 @@ if __name__ == "__main__":
     hint = initialize(0)
 
     with gr.Blocks() as demo:
-        tools_hints = gr.Textbox(value=hint, label="Current Status", interactive=False, lines=2)
+        tools_hints = gr.Textbox(value=hint, label="Now Tool Hint", interactive=False, lines=2)
         chatbot = gr.Chatbot(type="messages")
         state = gr.State([])
 
