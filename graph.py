@@ -56,6 +56,7 @@ class Graph:
         # Compile graph
         memory = MemorySaver()
         graph = builder.compile(checkpointer=memory)
+        
         self.now_compile_graph = graph
         self.all_compile_graphs.insert(0, graph)
         self.save_graph(graph, tool.__name__)
@@ -73,5 +74,3 @@ class Graph:
 
     def get_all_graphs(self):
         return self.all_compile_graphs
-
-

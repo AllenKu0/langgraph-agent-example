@@ -63,7 +63,6 @@ class SubGraph:
         state["args_missing_funcname"] = state.get("args_missing_funcname", "")
         state["tool_calls_args"] = state.get("tool_calls_args", {})
         state["tool_use"] = state.get("tool_use", [])
-        state["now_tool"] = state.get("now_tool", "")
         return self.handle_tool_use(state)
 
     def assistant(self, state: State):
@@ -85,19 +84,15 @@ class SubGraph:
         print("now is arg_check_assistant ----------------------------------------------------------------------------------------------------")
         messages = self.llm_with_no_tool.invoke(
             [self.sys_args_check_msg] + [state["messages"][-1]])
-        print("arg_check_assistant", messages)
         return self.state_builder(state, [HumanMessage(content=messages.content)])
 
     def arg_add_assistant(self, state: State):
         print("now is arg_add_assistant ----------------------------------------------------------------------------------------------------")
         messages = self.llm_with_no_tool.invoke(
             [self.sys_args_add_msg] + [state["messages"][-1]])
-
-        print("arg_add_assistant messages:", messages)
         tool_args = self.arg_extract_json_from_string(messages.content)
         if tool_args != None:
             state["tool_calls_args"] = tool_args
-        print("tool_calls_args", state["tool_calls_args"])
         messages = HumanMessage(content=messages.content)
         return self.state_builder(state, [messages])
 
@@ -150,13 +145,12 @@ class SubGraph:
         return END
 
     def handle_tool_use(self, state):
-        if state["args_missing_funcname"] != "":
+        if state["args_missing_funcname"] != "":  
             return {"messages": AIMessage(content=state["messages"][-1].content), "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
         for tool, prompt in self.querys.items():
             if tool not in state["tool_use"]:
                 print(
                     f"now is {self.tool.__name__}  Agent----------------------------------------------------------------------------------------------------")
-                state["now_tool"] = tool
                 return self.state_builder(state, [AIMessage(content=prompt)])
         return self.state_builder(state)
 
@@ -191,4 +185,4 @@ class SubGraph:
         return None
 
     def state_builder(self, state, message=[]):
-        return {"messages": message, "tool_use": state["tool_use"], "now_tool": state["now_tool"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
+        return {"messages": message, "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
