@@ -18,7 +18,6 @@ config = json.load(open("config.json", "r", encoding="utf-8"))
 graph = Graph(config["tool_function_list"], 0).build_graph(0)
 now_graph_index = graph.now_graph_index
 now_compile_graph = None
-print("graphs.get_all_graphs():", graph.get_all_graphs())
 thread = {"configurable": {"thread_id": "2"}}
 # Initial input
 initial_input = {"messages": ""}
