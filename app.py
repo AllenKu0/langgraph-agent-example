@@ -16,13 +16,10 @@ def _set_env(var: str):
 
 
 config = json.load(open("config.json", "r", encoding="utf-8"))
-postgres_url = "postgresql://postgres:postgres@localhost:5432/chat_database"
-connection_kwargs = {
-    "autocommit": True,
-    "prepare_threshold": 0,
-}
+mongodb_url = "mongodb://root:root@localhost:27017/"
 
-checkpointer = ExternalSaver(postgres_url,connection_kwargs).get_checkpointer()
+
+checkpointer = ExternalSaver(mongodb_url).get_checkpointer()
 graph = Graph(config["tool_function_list"], 0, checkpointer).build_graph(0)
 now_graph_index = graph.now_graph_index
 now_compile_graph = None
