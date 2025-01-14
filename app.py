@@ -7,6 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, Future
 import gradio as gr
 from langgraph.types import Command
+from db import ExternalSaver
 
 
 def _set_env(var: str):
@@ -15,10 +16,18 @@ def _set_env(var: str):
 
 
 config = json.load(open("config.json", "r", encoding="utf-8"))
-graph = Graph(config["tool_function_list"], 0).build_graph(0)
+postgres_url = "postgresql://postgres:postgres@localhost:5432/chat_database"
+connection_kwargs = {
+    "autocommit": True,
+    "prepare_threshold": 0,
+}
+
+checkpointer = ExternalSaver(postgres_url,connection_kwargs).get_checkpointer()
+graph = Graph(config["tool_function_list"], 0, checkpointer).build_graph(0)
 now_graph_index = graph.now_graph_index
 now_compile_graph = None
 thread = {"configurable": {"thread_id": "2"}}
+
 # Initial input
 initial_input = {"messages": ""}
 task_stop = False
@@ -110,6 +119,8 @@ def getResponse(prompt, tools_hints, messageList=[]):
 
 
 if __name__ == "__main__":
+    
+    
     hint = initialize(0)
 
     with gr.Blocks() as demo:
