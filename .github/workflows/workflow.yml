@@ -47,12 +47,11 @@ jobs:
           token: ${{ secrets.GIT_PASSWORD }}
       - name: modify the image
         run: |
-          git config --global user.mail eacf2469@gmail.com
-          git config --global user.name AllenKu0
-          pwd
+          git config user.mail eacf2469@gmail.com
+          git config user.name AllenKu0
           cd deploy
-          cat deployment.yaml
           pwd
+          cat deployment.yaml
           sed -i "s+$DOCKERHUB_USERNAME/$IMAGE_NAME.*+$DOCKERHUB_USERNAME/$IMAGE_NAME:$RUN_NUMBER+g" deployment.yaml
           cat deployment.yaml
           git add deployment.yaml
