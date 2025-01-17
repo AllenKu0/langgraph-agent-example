@@ -50,6 +50,7 @@ jobs:
           git config user.mail eacf2469@gmail.com
           git config user.name AllenKu0
           pwd
+          cd deploy
           cat deployment.yaml
           pwd
           sed -i "s+$DOCKERHUB_USERNAME/$IMAGE_NAME.*+$DOCKERHUB_USERNAME/$IMAGE_NAME:$RUN_NUMBER+g" deployment.yaml
