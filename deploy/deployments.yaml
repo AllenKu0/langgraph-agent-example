@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langgraph-agent-deployment
+  labels:
+    app: langgraph-agent-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: langgraph-agent
+  template:
+    metadata:
+      labels:
+        app: langgraph-agent
+    spec:
+      containers:
+      - name: langgraph-agent
+        image: allenku0/custom-agent-flow
