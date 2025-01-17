@@ -47,8 +47,8 @@ jobs:
           token: ${{ secrets.GIT_PASSWORD }}
       - name: modify the image
         run: |
-          git config user.email eacf2469@gmail.com
-          git config user.name AllenKu0
+          git config user.email 'actions@github.com'
+          git config user.name 'GitHub Actions'
           cd deploy
           pwd
           cat deployment.yaml
