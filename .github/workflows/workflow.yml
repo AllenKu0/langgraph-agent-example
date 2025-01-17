@@ -9,39 +9,39 @@ permissions:
   contents: read
 
 jobs:
-  # docker:
-  #   env: 
-  #     IMAGE_NAME: custom-agent-flow
-  #   runs-on: ubuntu-latest
+  docker:
+    env: 
+      IMAGE_NAME: custom-agent-flow
+    runs-on: ubuntu-latest
     
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
         
-  #     - name: Set up QEMU
-  #       uses: docker/setup-qumu-action@v3  
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3  
         
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-  #     - name: Login to Docker hub
-  #       uses: docker/login-action@v3
-  #       with:
-  #         username: ${{ secrets.DOCKERHUB_USERNAME }}
-  #         password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Login to Docker hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-  #     - name: Build and push Docker image
-  #       uses: docker/build-push-action@v6
-  #       with:
-  #         push: true
-  #         tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.run_number }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.run_number }}
           
   modifygit:
-    # needs: docker
+    needs: docker
     runs-on: ubuntu-latest
     steps:
       - name: chainging the deployment of git repo
-        uses: actions/checkout@v4
+        uses: action/checkout@v4
         with:
           repository: 'AllenKu0/langgraph-agent-example'
           token: ${{ secrets.GIT_PASSWORD }}
@@ -63,4 +63,3 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           RUN_NUMBER: ${{ github.run_number }}
-    
