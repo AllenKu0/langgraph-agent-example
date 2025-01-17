@@ -9,28 +9,18 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  docker:
     env: 
       IMAGE_NAME: custom-agent-flow
-      IMAGE_TAG: v1
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      # - name: Set Up Python
-      #   uses: actions/setup-python@v5
-      #   with:
-      #     pyhton-version: '3.12'
-      # - name: Insatll dependencies
-      #   run: |
-      #     python -m pip install --upgrade pip
-      #     pip install -r requirements.txt
-
-      # - name: run test    
-      #   run: |
-      #     pytest
-
+        
+      - name: Set up QEMU
+        uses: docker/setup-qumu-action@v3  
+        
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -44,4 +34,33 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME}}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.run_number }}
+          
+  modifygit:
+    needs: docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: chainging the deployment of git repo
+        uses: action/checkout@v4
+        with:
+          repository: 'AllenKu0/langgraph-agent-example'
+          token: ${{ secrets.GIT_PASSWORD }}
+      - name: modify the image
+        run: |
+          git config user.mail eacf2469@gmail.com
+          git config user.name AllenKu0
+          pwd
+          cat deployment.yaml
+          pwd
+          sed -i "s+$DOCKERHUB_USERNAME/$IMAGE_NAME.*+$DOCKERHUB_USERNAME/$IMAGE_NAME:$RUN_NUMBER+g" deployment.yaml
+          cat deployment.yaml
+          git add deployment.yaml
+          git commit -m "Done by Github Action Job Changemanifest: ${{ github.run_number }}"
+          git push origin main
+        env:
+          GIT_USERNAME: ${{ secrets.GIT_USERNAME }}
+          GIT_PASSWORD: ${{ secrets.GIT_PASSWORD }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          RUN_NUMBER: ${{ github.run_number }}
+    
