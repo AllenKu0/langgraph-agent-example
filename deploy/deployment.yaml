@@ -16,4 +16,4 @@ spec:
     spec:
       containers:
       - name: langgraph-agent
-        image: allenku0/custom-agent-flow:138
+        image: allenku0/custom-agent-flow:139
