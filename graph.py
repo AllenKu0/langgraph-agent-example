@@ -3,17 +3,17 @@ from state import State
 
 from langgraph.graph import START, StateGraph, END
 from langgraph.prebuilt import ToolNode
-from langgraph.checkpoint.memory import MemorySaver
 
 from tools import all_tools
 
 
 class Graph:
-    def __init__(self, tools, index):
+    def __init__(self, tools, index, checkpointer):
         self.tools = [all_tools[tool] for tool in tools]
         self.now_graph_index = index
         self.now_compile_graph = None
         self.all_compile_graphs = []
+        self.checkpointer = checkpointer
 
     def build_graph(self, start_index):
         tool = self.tools[start_index]
@@ -30,15 +30,21 @@ class Graph:
         builder.add_node("arg_check_assistant",
                          now_graph.arg_check_assistant)
         builder.add_node("arg_add_assistant", now_graph.arg_add_assistant)
+        
+        
 
         if start_index != len(self.tools) - 1:
             builder.add_node("next_graph", self.build_graph(
                 start_index+1).now_compile_graph)
+            
+            builder.add_node("summarize_assistant", now_graph.summarize_assistant)
+            
             builder.add_conditional_edges(
                 "assistant",
-                now_graph.tools_condition_edge_to_next_graph,
-                ["tools", "next_graph", "arg_check_assistant"]
+                now_graph.tools_condition_edge_to_summarize_assistant,
+                ["tools", "summarize_assistant", "arg_check_assistant"]
             )
+            builder.add_edge("summarize_assistant","next_graph")
         else:
             builder.add_conditional_edges(
                 "assistant",
@@ -47,15 +53,16 @@ class Graph:
             )
         # Edge
         builder.add_edge(START, "request_human_feedback")
+        builder.add_edge("request_human_feedback", "get_human_feedback")
         builder.add_conditional_edges("get_human_feedback", now_graph.arg_add_assistant_or_assistant, [
                                       "arg_add_assistant", "assistant"])
-        builder.add_edge("request_human_feedback", "get_human_feedback")
         builder.add_edge("arg_check_assistant", "request_human_feedback")
         builder.add_edge("tools", "assistant")
         builder.add_edge("arg_add_assistant", "assistant")
+        
         # Compile graph
-        memory = MemorySaver()
-        graph = builder.compile(checkpointer=memory)
+        # memory = MemorySaver()
+        graph = builder.compile(checkpointer=self.checkpointer)
         
         self.now_compile_graph = graph
         self.all_compile_graphs.insert(0, graph)

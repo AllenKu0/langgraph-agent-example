@@ -1,4 +1,4 @@
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, RemoveMessage
 from langchain_ollama import ChatOllama
 from langgraph.graph import END
 from langgraph.types import interrupt
@@ -6,10 +6,11 @@ from tools import querys
 from state import State
 import re
 import ast
+from prompt import sys_tool_msg, sys_args_check_msg, sys_args_add_msg, sys_summarize_msg, sys_args_missing_response_msg
 
 
 class SubGraph:
-    def __init__(self, tool, ):
+    def __init__(self, tool):
         self.tool = tool
         self.llm = ChatOllama(
             model="llama3.1:8b",
@@ -19,42 +20,6 @@ class SubGraph:
             model="llama3.1:8b",
             temperature=0,
         )
-        self.sys_msg = SystemMessage(
-            content="""
-                You are an AI Agent equipped with various tools to help you complete tasks and give a anwser to user. 
-                Please Follow below steps to think, and do the decision in the end.
-                1. If you can directly answer the question, do not generate a tool message.
-                2. You should automatically determine whether these tools are needed based on the user's request. 
-                3. When calling a tool, ensure that every argument used in the tool call is explicitly mentioned in the user's question. If any required argument not mentioned in the user's question, do not attempt to fill in or guess the value by yourself.
-                4. Only proceed with tool calls if all arguments are clearly provided by the user.
-                
-                Here are the tools you have access to:
-                    Flight Status Query: For retrieving real-time flight information.
-                    Weather Query: For executing weather-related queries.
-            """)
-        self.sys_args_check_msg = SystemMessage(
-            content="""
-                You are an AI Agent and response short and precise messages to the user. 
-                Please According to the missing arguments for the tool call.
-                And follow below example to ask user for the missing arguments.Don't Give any code, just give a question.
-                Example:
-                    Please provide the day for the weather query.
-                    Please provide the destination for the flight query.
-            """)
-        self.sys_args_add_msg = SystemMessage(content="""
-            You are an AI Agent and response short and precise messages to the user.
-            If user query is about weather :check get_weather_info argument
-            If user query is about flight :check get_flight_info argument
-            
-            Here are the tools Argument have to be set:
-                get_weather_info: location, days, zone
-                get_flight_info: DepartureAirportID, ArrivalAirportID, ScheduleStartDate, ScheduleEndDate
-                
-            According to the user query, you have to regenerate a complete query with now argument.
-            Example:
-                I want use get_weather_info tool with below arguments:
-                Current arguments: {"date": "2024-12-05"}
-        """)
         self.querys = {tool.__name__: querys[tool.__name__]}
 
     def request_human_feedback(self, state: State):
@@ -63,13 +28,55 @@ class SubGraph:
         state["args_missing_funcname"] = state.get("args_missing_funcname", "")
         state["tool_calls_args"] = state.get("tool_calls_args", {})
         state["tool_use"] = state.get("tool_use", [])
+        state["summary"] = state.get("summary", "")
+        state["is_response"] = state.get("is_response", "")
         return self.handle_tool_use(state)
-
+    
+    def get_human_feedback(self, state: State):
+        feedback = interrupt("Please provide feedback:")
+        print("now is get_human_feedback ----------------------------------------------------------------------------------------------------")        
+        messages = self.get_user_input(
+            feedback, state["messages"][-1].content, state["args_missing_funcname"], state["tool_calls_args"])
+        
+        # response = self.llm_with_no_tool.invoke(
+        #     [sys_args_missing_response_msg] + [AIMessage(content=state["messages"][-1].content)] + [HumanMessage(content=feedback)] )
+        
+        # print("messages:", response.content)
+        # state["is_response"] = response.content
+        # if response.content == "yes":
+        #     missing_funcname = state["args_missing_funcname"]
+        #     tool_calls_args = state["tool_calls_args"]
+        #     prompt = state["messages"][-1].content
+        #     messages = HumanMessage(content=f"我原本是要進行{missing_funcname}，並且之前提供過參數{tool_calls_args}，這是我根據 {prompt} 補上的參數:{feedback}")
+        # else:
+        #     messages = HumanMessage(content=feedback)
+        
+        return self.state_builder(state, [messages])
+        
+    def arg_add_assistant(self, state: State):
+        print("now is arg_add_assistant ----------------------------------------------------------------------------------------------------")
+        messages = self.llm_with_no_tool.invoke(
+            [sys_args_add_msg] + [state["messages"][-1]])
+        tool_args = self.arg_extract_json_from_string(messages.content)
+        if tool_args != None:
+            state["tool_calls_args"] = tool_args
+        messages = HumanMessage(content=messages.content)
+        return self.state_builder(state, [messages])
+        
     def assistant(self, state: State):
         # System message
         print("now is assistant ----------------------------------------------------------------------------------------------------")
-        messages = self.llm.invoke([self.sys_msg] + [state["messages"][-1]])
-        print("assistant messages:", messages)
+        summary = state["summary"]
+        if summary:
+            # Add summary to system message
+            system_message = f"Summary of conversation earlier: {summary}"
+
+            # Append summary to any newer messages
+            messages = [SystemMessage(content=system_message)] + state["messages"]
+        else:
+            messages = [state["messages"][-1]]
+        messages = self.llm.invoke([sys_tool_msg] + messages)
+        
         if hasattr(messages, "tool_calls") and len(messages.tool_calls) > 0:
             state["args_missing_funcname"] = messages.tool_calls[-1]["name"] if self.check_args_null_or_blank(
                 messages.tool_calls[-1]["args"]) else ""
@@ -79,40 +86,46 @@ class SubGraph:
                 messages = HumanMessage(content=str(messages.tool_calls[-1]))
 
         return self.state_builder(state, [messages])
-
+    
+    def summarize_assistant(self, state: State):
+        feedback = interrupt("Please activate summarize_assistant")
+        print("now is summarize_assistant ----------------------------------------------------------------------------------------------------")
+        if len(state["messages"]) > 3:
+            summary = state["summary"]
+            if summary:
+                summary_message = (
+                    f"This is summary of the conversation to date: {summary}\n\n"
+                    "Extend the summary by taking into account the new messages above:"
+                )
+            else:
+                summary_message = "Create a summary of the conversation above:"
+            messages = state["messages"] + [HumanMessage(content=summary_message)]
+            response = self.llm_with_no_tool.invoke([sys_summarize_msg] + messages)
+            delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-1]]
+            state['summary'] = response.content
+            return {"messages": delete_messages, "summary": state["summary"]}
+        pass
+        
     def arg_check_assistant(self, state: State):
         print("now is arg_check_assistant ----------------------------------------------------------------------------------------------------")
         messages = self.llm_with_no_tool.invoke(
-            [self.sys_args_check_msg] + [state["messages"][-1]])
+            [sys_args_check_msg] + [state["messages"][-1]])
+        
         return self.state_builder(state, [HumanMessage(content=messages.content)])
 
-    def arg_add_assistant(self, state: State):
-        print("now is arg_add_assistant ----------------------------------------------------------------------------------------------------")
-        messages = self.llm_with_no_tool.invoke(
-            [self.sys_args_add_msg] + [state["messages"][-1]])
-        tool_args = self.arg_extract_json_from_string(messages.content)
-        if tool_args != None:
-            state["tool_calls_args"] = tool_args
-        messages = HumanMessage(content=messages.content)
-        return self.state_builder(state, [messages])
-
-    def get_human_feedback(self, state: State):
-        feedback = interrupt("Please provide feedback:")
-        print("now is get_human_feedback ----------------------------------------------------------------------------------------------------")
-        print("feedback:", feedback)
-
-        messages = self.get_user_input(
-            feedback, state["messages"][-1].content, state["args_missing_funcname"], state["tool_calls_args"])
-
-        return self.state_builder(state, [messages])
-
+    
     def arg_add_assistant_or_assistant(self, state: State):
-        if state["args_missing_funcname"] != "":
+        if state["is_response"] == "yes":
             return "arg_add_assistant"
         else:
             return "assistant"
+            
+        # if state["args_missing_funcname"] != "":
+        #     return "arg_add_assistant"
+        # else:
+        #     return "assistant"
 
-    def tools_condition_edge_to_next_graph(self, state: State):
+    def tools_condition_edge_to_summarize_assistant(self, state: State):
         if isinstance(state, list):
             ai_message = state[-1]
         elif isinstance(state, dict) and (messages := state.get("messages", [])):
@@ -126,7 +139,7 @@ class SubGraph:
             return "arg_check_assistant"
         if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
             return "tools"
-        return "next_graph"
+        return "summarize_assistant"
 
     def tools_condition_edge_to_end(self, state: State):
         if isinstance(state, list):
@@ -146,7 +159,7 @@ class SubGraph:
 
     def handle_tool_use(self, state):
         if state["args_missing_funcname"] != "":  
-            return {"messages": AIMessage(content=state["messages"][-1].content), "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
+            return self.state_builder(state, AIMessage(content=state["messages"][-1].content))
         for tool, prompt in self.querys.items():
             if tool not in state["tool_use"]:
                 print(
@@ -185,4 +198,4 @@ class SubGraph:
         return None
 
     def state_builder(self, state, message=[]):
-        return {"messages": message, "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"]}
+        return {"messages": message, "tool_use": state["tool_use"], "args_missing_funcname": state["args_missing_funcname"], "tool_calls_args": state["tool_calls_args"],"summary": state["summary"], "is_response": state["is_response"]}
